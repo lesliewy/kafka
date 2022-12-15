@@ -207,6 +207,7 @@ public class Sender implements Runnable {
 
                 if (!transactionManager.isTransactional()) {
                     // this is an idempotent producer, so make sure we have a producer id
+                    // 有retry.backoff.ms 逻辑.
                     maybeWaitForProducerId();
                 } else if (transactionManager.hasUnresolvedSequences() && !transactionManager.hasFatalError()) {
                     transactionManager.transitionToFatalError(new KafkaException("The client hasn't received acknowledgment for " +
@@ -236,16 +237,20 @@ public class Sender implements Runnable {
         }
 
         long pollTimeout = sendProducerData(now);
+        // 将kafkaChannel.send 字段保存的request发送出去. 同时处理服务端的响应.
         client.poll(pollTimeout, now);
     }
 
     private long sendProducerData(long now) {
+        // 获取集群元数据。
         Cluster cluster = metadata.fetch();
 
         // get the list of partitions with data ready to send
+        // 选出可以向哪些node发送消息.
         RecordAccumulator.ReadyCheckResult result = this.accumulator.ready(cluster, now);
 
         // if there are any partitions whose leaders are not known yet, force metadata update
+        // 标记需要更新集群元数据.
         if (!result.unknownLeaderTopics.isEmpty()) {
             // The set of topics with unknown leader contains topics with leader election pending as well as
             // topics which may have expired. Add the topic again to metadata to ensure it is included
@@ -259,6 +264,7 @@ public class Sender implements Runnable {
         }
 
         // remove any nodes we aren't ready to send to
+        // 调用client.ready()检查网络.剔除不符合条件的nodes
         Iterator<Node> iter = result.readyNodes.iterator();
         long notReadyTimeout = Long.MAX_VALUE;
         while (iter.hasNext()) {
@@ -270,6 +276,7 @@ public class Sender implements Runnable {
         }
 
         // create produce requests
+        // 获取待发送的消息集合. key: nodeId.
         Map<Integer, List<ProducerBatch>> batches = this.accumulator.drain(cluster, result.readyNodes,
                 this.maxRequestSize, now);
         if (guaranteeMessageOrder) {
@@ -309,6 +316,7 @@ public class Sender implements Runnable {
             // otherwise the select time will be the time difference between now and the metadata expiry time;
             pollTimeout = 0;
         }
+        // 发送请求.
         sendProduceRequests(batches, now);
 
         return pollTimeout;
@@ -467,6 +475,7 @@ public class Sender implements Runnable {
             log.trace("Cancelled request with header {} due to node {} being disconnected",
                     requestHeader, response.destination());
             for (ProducerBatch batch : batches.values())
+                // 有重试逻辑.
                 completeBatch(batch, new ProduceResponse.PartitionResponse(Errors.NETWORK_EXCEPTION), correlationId, now, 0L);
         } else if (response.versionMismatch() != null) {
             log.warn("Cancelled request {} due to a version mismatch with node {}",
@@ -521,6 +530,7 @@ public class Sender implements Runnable {
             this.accumulator.deallocate(batch);
             this.sensors.recordBatchSplit();
         } else if (error != Errors.NONE) {
+            // 重试。 retries
             if (canRetry(batch, response)) {
                 log.warn("Got error produce response with correlation id {} on topic-partition {}, retrying ({} attempts left). Error: {}",
                         correlationId,
@@ -672,6 +682,7 @@ public class Sender implements Runnable {
                 minUsedMagic = batch.magic();
         }
 
+        // 封装batch. 按照partition分类.
         for (ProducerBatch batch : batches) {
             TopicPartition tp = batch.topicPartition;
             MemoryRecords records = batch.records();
@@ -685,6 +696,7 @@ public class Sender implements Runnable {
             // which is supporting the new magic version to one which doesn't, then we will need to convert.
             if (!records.hasMatchingMagic(minUsedMagic))
                 records = batch.records().downConvert(minUsedMagic, 0, time).records();
+            // 实际发送的有效载体.
             produceRecordsByPartition.put(tp, records);
             recordsByPartition.put(tp, batch);
         }
@@ -695,6 +707,7 @@ public class Sender implements Runnable {
         }
         ProduceRequest.Builder requestBuilder = ProduceRequest.Builder.forMagic(minUsedMagic, acks, timeout,
                 produceRecordsByPartition, transactionalId);
+        // 回调对象. Sender.poll()使用.
         RequestCompletionHandler callback = new RequestCompletionHandler() {
             public void onComplete(ClientResponse response) {
                 handleProduceResponse(response, recordsByPartition, time.milliseconds());
@@ -702,8 +715,10 @@ public class Sender implements Runnable {
         };
 
         String nodeId = Integer.toString(destination);
+        // 封装请求. 每个node至多一个clientRequest.
         ClientRequest clientRequest = client.newClientRequest(nodeId, requestBuilder, now, acks != 0,
                 requestTimeoutMs, callback);
+        // 将request写入kafkaChannel.send
         client.send(clientRequest, now);
         log.trace("Sent produce request to {}: {}", nodeId, requestBuilder);
     }

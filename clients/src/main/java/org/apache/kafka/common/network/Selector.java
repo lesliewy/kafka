@@ -450,6 +450,7 @@ public class Selector implements Selectable, AutoCloseable {
 
         // we use the time at the end of select to ensure that we don't close any connections that
         // have just been processed in pollSelectionKeys
+        // 和 connections.max.idle.ms 有关. 关闭超过指定空闲时间的连接.
         maybeCloseOldestConnection(endSelect);
 
         // Add to completedReceives after closing expired connections to avoid removing

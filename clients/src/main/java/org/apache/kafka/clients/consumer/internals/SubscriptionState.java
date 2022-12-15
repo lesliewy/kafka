@@ -98,6 +98,7 @@ public class SubscriptionState {
      * @param type The given subscription type
      */
     private void setSubscriptionType(SubscriptionType type) {
+        // 显然，只有NONE才可以。也就是说 AUTO_TOPICS, AUTO_PATTERN, USER_ASSIGNED 3者互相之间互斥.
         if (this.subscriptionType == SubscriptionType.NONE)
             this.subscriptionType = type;
         else if (this.subscriptionType != type)
@@ -108,6 +109,7 @@ public class SubscriptionState {
         if (listener == null)
             throw new IllegalArgumentException("RebalanceListener cannot be null");
 
+        // 提交模式。
         setSubscriptionType(SubscriptionType.AUTO_TOPICS);
 
         this.rebalanceListener = listener;
@@ -455,6 +457,7 @@ public class SubscriptionState {
     }
 
     private static class TopicPartitionState {
+        // 下次要从kafka获取消息的offset.
         private Long position; // last consumed position
         private Long highWatermark; // the high watermark from last fetch
         private Long logStartOffset; // the log start offset

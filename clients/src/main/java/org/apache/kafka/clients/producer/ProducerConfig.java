@@ -46,6 +46,7 @@ public class ProducerConfig extends AbstractConfig {
      * CHANGE WILL BREAK USER CODE.
      */
 
+    // static 块中初始化，利用这个ConfigDef来解析配置.
     private static final ConfigDef CONFIG;
 
     /** <code>bootstrap.servers</code> */

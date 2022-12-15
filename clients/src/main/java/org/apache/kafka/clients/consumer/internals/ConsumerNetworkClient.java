@@ -258,7 +258,9 @@ public class ConsumerNetworkClient implements Closeable {
             handlePendingDisconnects();
 
             // send all the requests we can send now
+            // 循环处理unsent中缓存的请求.
             long pollDelayMs = trySend(now);
+            // 计算阻塞时间.
             timeout = Math.min(timeout, pollDelayMs);
 
             // check whether the poll is still needed by the caller. Note that if the expected completion
@@ -268,6 +270,7 @@ public class ConsumerNetworkClient implements Closeable {
                 // if there are no requests in flight, do not block longer than the retry backoff
                 if (client.inFlightRequestCount() == 0)
                     timeout = Math.min(timeout, retryBackoffMs);
+                // 将KafkaChannel.send字段指定的消息发送出去. 可能会更新metadata使用handle*处理请求响应，连接断开、超时等情况.
                 client.poll(Math.min(maxPollTimeoutMs, timeout), now);
                 now = time.milliseconds();
             } else {
@@ -277,6 +280,7 @@ public class ConsumerNetworkClient implements Closeable {
             // handle any disconnects by failing the active requests. note that disconnects must
             // be checked immediately following poll since any subsequent call to client.ready()
             // will reset the disconnect status
+            // 检测连接状态。当检测到连接断开的node时，会将其unsent中对应的clientRequest对象清除.
             checkDisconnects(now);
             if (!disableWakeup) {
                 // trigger wakeups after checking for disconnects so that the callbacks will be ready
@@ -288,6 +292,7 @@ public class ConsumerNetworkClient implements Closeable {
 
             // try again to send requests since buffer space may have been
             // cleared or a connect finished in the poll
+            // 再次调用trySend(),
             trySend(now);
 
             // fail requests that couldn't be sent if they have expired
@@ -482,6 +487,7 @@ public class ConsumerNetworkClient implements Closeable {
 
             while (iterator.hasNext()) {
                 ClientRequest request = iterator.next();
+                // 先检测是否可以发送请求，可以的话则发送并从unsent中删除
                 if (client.ready(node, now)) {
                     client.send(request, now);
                     iterator.remove();

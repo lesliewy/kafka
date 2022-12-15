@@ -44,7 +44,7 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
 
     /**
      * Get just the records for the given partition
-     * 
+     * 获取消息集中指定分区的消息
      * @param partition The partition to get records for
      */
     public List<ConsumerRecord<K, V>> records(TopicPartition partition) {
@@ -57,6 +57,7 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
 
     /**
      * Get just the records for the given topic
+     * 获取消息集中指定topic的消息.
      */
     public Iterable<ConsumerRecord<K, V>> records(String topic) {
         if (topic == null)
@@ -72,6 +73,7 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
     /**
      * Get the partitions which have records contained in this record set.
      * @return the set of partitions with data in this record set (may be empty if no data was returned)
+     * 获取消息集中所有分区
      */
     public Set<TopicPartition> partitions() {
         return Collections.unmodifiableSet(records.keySet());

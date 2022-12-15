@@ -31,9 +31,16 @@ public class Consumer extends ShutdownableThread {
 
     public Consumer(String topic) {
         super("KafkaConsumerExample", false);
+        /**
+         * 必要的4个参数:
+         * bootstrap.servers
+         * group.id: 消费者组名称. 默认为""
+         * key.deserializer 和 value.deserializer: 反序列化器.
+         */
         Properties props = new Properties();
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, KafkaProperties.KAFKA_SERVER_URL + ":" + KafkaProperties.KAFKA_SERVER_PORT);
         props.put(ConsumerConfig.GROUP_ID_CONFIG, "DemoConsumer");
+        // 自动提交.
         props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true");
         props.put(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, "1000");
         props.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "30000");
@@ -46,6 +53,18 @@ public class Consumer extends ShutdownableThread {
 
     @Override
     public void doWork() {
+        /**
+         * 订阅主题.
+         * 有3中订阅方式：
+         * 1, 集合订阅的方式 subscribe(Collection)
+         * 2, 正则表达式订阅的方式 subscribe(Pattern)
+         * 3, 指定分区的订阅方式 assign(Collection) consumer.assign(Arrays.asList(new TopicPartition("topic-demo", 0)));  利用partitionsFor(String topic)可以查询主题有哪些分区.
+         * 分表代表了三 种不同的订阅状态： AUTO_TOPICS 、 AUTO_PATTERN 和 USER_ASSIGNED（如果没有订阅，那么订阅状态为 NONE）。
+         * 然而这三种状态是互斥的，在一个消费者中只能使用其中的一种，否则会报出 IllegalStateException 异常：java.lang.IllegalStateException: Subscription to topics, partitions and pattern
+         * are mutually exclusive.
+         *
+         * 通过 subscribe()方法订阅主题具有消费者自动再均衡的功能, 而通过 assign()方法订阅分区时，则不具备.
+         */
         consumer.subscribe(Collections.singletonList(this.topic));
         ConsumerRecords<Integer, String> records = consumer.poll(1000);
         for (ConsumerRecord<Integer, String> record : records) {

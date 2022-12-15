@@ -193,7 +193,9 @@ public final class RecordAccumulator {
         if (headers == null) headers = Record.EMPTY_HEADERS;
         try {
             // check if we have an in-progress batch
+            // 每个分区都有一个双端队列. value 为ProducerBatch.
             Deque<ProducerBatch> dq = getOrCreateDeque(tp);
+            // 有可用的producerBatch,就写入.
             synchronized (dq) {
                 if (closed)
                     throw new KafkaException("Producer closed while send in progress");
@@ -203,7 +205,11 @@ public final class RecordAccumulator {
             }
 
             // we don't have an in-progress record batch try to allocate a new batch
+            // 没有可用的ProducerBatch,则需要创建一个新的ProducerBatch
             byte maxUsableMagic = apiVersions.maxUsableProduceMagic();
+            // 评估这条消息的大小是否超过 batch.size 参数的大小, 默认16k.
+            // 如果不超过，那么就以 batch.size 参数的大小来创建 ProducerBatch，这样在使用完这段内存区域之后，可以通过 BufferPool 的管理来进行复用；
+            // 如果超过，那么就以评估的大小来创建 ProducerBatch，这段内存区域不会被复用。
             int size = Math.max(this.batchSize, AbstractRecords.estimateSizeInBytesUpperBound(maxUsableMagic, compression, key, value, headers));
             log.trace("Allocating a new {} byte message buffer for topic {} partition {}", size, tp.topic(), tp.partition());
             buffer = free.allocate(size, maxTimeToBlock);

@@ -34,7 +34,13 @@ public class Producer extends Thread {
 
     public Producer(String topic, Boolean isAsync) {
         Properties props = new Properties();
+        /**
+         * 必须的3个参数:
+         * bootstrap.servers: host1:port1,host2:port2
+         * key.serializer 和 value.serializer: 往 broker 之前需要将消息中对应的 key 和 value 做相应的序列化操作来转换成字节数组。
+         */
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, KafkaProperties.KAFKA_SERVER_URL + ":" + KafkaProperties.KAFKA_SERVER_PORT);
+        // 设定 KafkaProducer 对应的客户端 id，默认值为“”。如果客户端不设置，则 KafkaProducer 会自动生成一个非空字符串，内容形式如“producer-1”“producer -2”
         props.put(ProducerConfig.CLIENT_ID_CONFIG, "DemoProducer");
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class.getName());
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());

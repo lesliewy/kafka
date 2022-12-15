@@ -474,6 +474,7 @@ public class NetworkClient implements KafkaClient {
 
     private void doSend(ClientRequest clientRequest, boolean isInternalRequest, long now, AbstractRequest request) {
         String destination = clientRequest.destination();
+        // 请求头.
         RequestHeader header = clientRequest.makeHeader(request.version());
         if (log.isDebugEnabled()) {
             int latestClientVersion = clientRequest.apiKey().latestVersion();
@@ -493,6 +494,7 @@ public class NetworkClient implements KafkaClient {
                 request,
                 send,
                 now);
+        // 缓存clientRequest, 响应时使用.
         this.inFlightRequests.add(inFlightRequest);
         selector.send(send);
     }
@@ -521,6 +523,7 @@ public class NetworkClient implements KafkaClient {
 
         long metadataTimeout = metadataUpdater.maybeUpdate(now);
         try {
+            // 执行IO操作.
             this.selector.poll(Utils.min(timeout, metadataTimeout, defaultRequestTimeoutMs));
         } catch (IOException e) {
             log.error("Unexpected error during I/O", e);
@@ -528,13 +531,17 @@ public class NetworkClient implements KafkaClient {
 
         // process completed actions
         long updatedNow = this.time.milliseconds();
+        // 响应队列.
         List<ClientResponse> responses = new ArrayList<>();
+        // 处理已完成请求队列.
         handleCompletedSends(responses, updatedNow);
         handleCompletedReceives(responses, updatedNow);
         handleDisconnections(responses, updatedNow);
         handleConnections();
         handleInitiateApiVersionRequests(updatedNow);
+        // 处理inFlightRequest中的超时请求.
         handleTimedOutRequests(responses, updatedNow);
+        // 调用clientRequest的回调函数。
         completeResponses(responses);
 
         return responses;
@@ -753,6 +760,8 @@ public class NetworkClient implements KafkaClient {
      */
     private void handleCompletedSends(List<ClientResponse> responses, long now) {
         // if no response is expected then when the send is completed, return it
+        // 最近发送成功的请求, 对应 inFlightRequests中该node队列的最后一个请求
+        // 找到原始请求，如果不需要响应就从inFlightRequests中删除。
         for (Send send : this.selector.completedSends()) {
             InFlightRequest request = this.inFlightRequests.lastSent(send.destination());
             if (!request.expectResponse) {
@@ -787,6 +796,7 @@ public class NetworkClient implements KafkaClient {
      * @param now The current time
      */
     private void handleCompletedReceives(List<ClientResponse> responses, long now) {
+        // inFlightRequests中删除已完成的.
         for (NetworkReceive receive : this.selector.completedReceives()) {
             String source = receive.source();
             InFlightRequest req = inFlightRequests.completeNext(source);
